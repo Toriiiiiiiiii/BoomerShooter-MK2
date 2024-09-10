@@ -13,6 +13,7 @@ namespace Engine {
     static Texture2D tex;
 
     class Sector;
+    class World;
 
     // Contains player information
     // Used for rendering the world and collisions
@@ -55,7 +56,7 @@ namespace Engine {
             : vertexIndex1(v1), vertexIndex2(v2), wallColour(c),
               isPortal(isPortal), frontSectorIndex(front), backSectorIndex(back) {}
 
-        void Draw3D(Player *p, sdword width, sdword height, std::vector<Point> points, float z, float h, Point *p1out = NULL, Point *p2out = NULL, Point *p3out = NULL, Point *p4out = NULL);
+        void Draw3D(Player *p, sdword width, sdword height, std::vector<Point> points, float z, float h, float sectorLightMultiplier, Point *p1out = NULL, Point *p2out = NULL, Point *p3out = NULL, Point *p4out = NULL);
         void DrawPortal(Player *p, sdword width, sdword height, std::vector<Point> points, std::vector<Sector> sectors, dword sectorID, Point *p1out = NULL, Point *p2out = NULL, Point *p3out = NULL, Point *p4out = NULL);
     };
 
@@ -69,8 +70,10 @@ namespace Engine {
         sdword floorHeight;
         sdword ceilHeight;
 
-        Sector(std::vector<dword> walls, Color fc, Color cc, sdword fh, sdword ch) :
-            wallIndices(walls), floorColour(fc), ceilColour(cc), floorHeight(fh), ceilHeight(ch) {}
+        float lightMultiplier;
+
+        Sector(std::vector<dword> walls, Color fc, Color cc, sdword fh, sdword ch, float l) :
+            wallIndices(walls), floorColour(fc), ceilColour(cc), floorHeight(fh), ceilHeight(ch), lightMultiplier(l) {}
 
         void Draw3D(Player *p, dword width, dword height, std::vector<Wall> walls, std::vector<Point> points, std::vector<Sector> sectors, sdword currentSectorIndex, sdword lastSectorIndex = -1);
     };

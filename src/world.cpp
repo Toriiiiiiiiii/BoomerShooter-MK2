@@ -75,7 +75,29 @@ namespace Engine {
         return ScreenPoint;
     }
 
-    void Wall::Draw3D(Player *p, sdword width, sdword height, std::vector<Point> points, float z, float h, Point *p1out, Point *p2out, Point *p3out, Point *p4out) {
+    void Wall::Draw3D(Player *p, sdword width, sdword height, std::vector<Point> points, float z, float h, float sectorLightMultiplier, Point *p1out, Point *p2out, Point *p3out, Point *p4out) {
+        Point v1 = points[vertexIndex1];
+        Point v2 = points[vertexIndex2];
+
+        double vdx = v2.x - v1.x;
+        double vdy = v2.y - v1.y;
+
+        double theta = 0;
+
+        if(v1.x < v2.x) {
+            if(v1.y < v2.y) {
+                theta = PI/2 + atan2(vdx, vdy);
+            } else {
+                theta = atan2(vdx, vdy);
+            }
+        } else {
+            if(v1.y < v2.y) {
+                theta = PI + atan2(vdx, vdy);
+            } else {
+                theta = 3*PI/2 + atan2(vdx, vdy);
+            }
+        }
+
         Point p1_rot = points[vertexIndex1].Project2D(p);
         Point p2_rot = points[vertexIndex2].Project2D(p);
 
@@ -158,6 +180,22 @@ namespace Engine {
         if(x1 >= width) x1 = width;
         if(x2 >= width) x2 = width;
 
+        double angledLightMultiplier = 0.5 * (theta/(2*PI)) + 0.5;
+        float r = wallColour.r * sectorLightMultiplier * angledLightMultiplier;
+        float g = wallColour.g * sectorLightMultiplier * angledLightMultiplier;
+        float b = wallColour.b * sectorLightMultiplier * angledLightMultiplier;
+
+        if(r > 255) r = 255;
+        if(g > 255) g = 255;
+        if(b > 255) b = 255;
+
+        Color col = {
+            (byte)(r),
+            (byte)(g),
+            (byte)(b),
+            255
+        };
+
         for(float x = x1; x < x2; ++x) {
             double yBottom = mBottom * x + cBottom;
             double yTop    = mTop    * x + cTop;
@@ -168,7 +206,7 @@ namespace Engine {
             if(yTop    >= height) yTop    = height;
 
             for(float y = yTop; y < yBottom; ++y) {
-                SetPix(Point(x, y), width, height, wallColour);
+                SetPix(Point(x, y), width, height, col);
             }
         }
 
@@ -183,12 +221,16 @@ namespace Engine {
         Sector back  = sectors[backSectorIndex];
 
         dword lowestFloorSecIndex = backSectorIndex;
+        dword highestFloorSecIndex = frontSectorIndex;
         dword lowestCeilSecIndex = backSectorIndex;
+        dword highestCeilSecIndex = frontSectorIndex;
         float minFloor, maxFloor;
         float minCeil, maxCeil;
 
         if(back.floorHeight > front.floorHeight) {
             lowestFloorSecIndex = frontSectorIndex;
+            highestFloorSecIndex = backSectorIndex;
+
             minFloor = front.floorHeight;
             maxFloor = back.floorHeight;
         } else {
@@ -198,6 +240,8 @@ namespace Engine {
 
         if(back.ceilHeight > front.ceilHeight) {
             lowestCeilSecIndex = frontSectorIndex;
+            highestCeilSecIndex = backSectorIndex;
+
             minCeil = front.ceilHeight;
             maxCeil = back.ceilHeight;
         } else {
@@ -211,24 +255,24 @@ namespace Engine {
         Point p1, p2, p3, p4;
 
         if(lowestFloorSecIndex == sectorID) {
-            lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minFloor, maxFloor, &p1, &p2);
+            lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minFloor, maxFloor, sectors[lowestFloorSecIndex].lightMultiplier, &p1, &p2);
 
             if(p1out) *p1out = p1;
             if(p2out) *p2out = p2;
         } else {
-            lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, maxFloor, maxFloor, &p1, &p2);
+            lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, maxFloor, maxFloor, sectors[highestFloorSecIndex].lightMultiplier, &p1, &p2);
 
             if(p1out) *p1out = p1;
             if(p2out) *p2out = p2;
         }
 
         if(lowestCeilSecIndex != sectorID) {
-            highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, maxCeil, NULL, NULL, &p3, &p4);
+            highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, maxCeil, sectors[highestCeilSecIndex].lightMultiplier, NULL, NULL, &p3, &p4);
 
             if(p3out) *p3out = p3;
             if(p4out) *p4out = p4;
         } else {
-            highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, minCeil, NULL, NULL, &p3, &p4);
+            highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, minCeil, sectors[lowestCeilSecIndex].lightMultiplier, NULL, NULL, &p3, &p4);
 
             if(p3out) *p3out = p3;
             if(p4out) *p4out = p4;
@@ -243,7 +287,7 @@ namespace Engine {
             Point p1, p2, p3, p4;
 
             if(w.isPortal) w.DrawPortal(p, width, height, points, sectors, currentSectorIndex, &p1, &p2, &p3, &p4);
-            else w.Draw3D(p, width, height, points, floorHeight, ceilHeight, &p1, &p2, &p3, &p4);
+            else w.Draw3D(p, width, height, points, floorHeight, ceilHeight, lightMultiplier, &p1, &p2, &p3, &p4);
 
             // Render Flats
             float mBottom = (p2.y - p1.y) / (p2.x - p1.x);
@@ -255,6 +299,20 @@ namespace Engine {
             float x1 = p1.x;
             float x2 = p2.x;
 
+            Color cCeil = {
+                (byte)(ceilColour.r * lightMultiplier),
+                (byte)(ceilColour.g * lightMultiplier),
+                (byte)(ceilColour.b * lightMultiplier),
+                255
+            };
+
+            Color cFloor = {
+                (byte)(floorColour.r * lightMultiplier),
+                (byte)(floorColour.g * lightMultiplier),
+                (byte)(floorColour.b * lightMultiplier),
+                255
+            };
+
             for(float x = x1; x < x2; ++x) {
                 double yBottom = mBottom * x + cBottom;
                 double yTop    = mTop    * x + cTop;
@@ -265,11 +323,11 @@ namespace Engine {
                 if(yTop    >= height) yTop    = height - 1;
 
                 for(float y = yBottom; y < height; ++y) {
-                    SetPix(Point(x, y), width, height, floorColour);
+                    SetPix(Point(x, y), width, height, cFloor);
                 }
 
                 for(float y = 0; y < yTop; ++y) {
-                    SetPix(Point(x, y), width, height, ceilColour);
+                    SetPix(Point(x, y), width, height, cCeil);
                 }
             }
         }
@@ -432,7 +490,9 @@ namespace Engine {
                                            (byte)std::strtod(args[index + 7].c_str(), NULL),
                                            255};
 
-                worldSectors.push_back(Sector(wallIndexes, floorC, ceilC, floorHeight, ceilHeight));
+                float  lightMult   = std::strtof(args[index + 8].c_str(), NULL);
+
+                worldSectors.push_back(Sector(wallIndexes, floorC, ceilC, floorHeight, ceilHeight, lightMult));
             }
         }
 

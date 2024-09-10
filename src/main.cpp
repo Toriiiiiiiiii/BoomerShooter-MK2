@@ -66,6 +66,7 @@ Wall *checkCollision(World *w, Player *p, Point oldPos, Point newPos, sdword ski
 int main(int argc, char **argv) {
     World w = World({}, {}, {});
     w.LoadMapFile("test.map");
+    //printf("here\n");
     InitWindow(WIDTH, HEIGHT, "Hello, World!");
     SetTargetFPS(30);
 
