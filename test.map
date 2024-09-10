@@ -1,0 +1,59 @@
+// Vertices - Sector 0
+vertex -100 -50 // 0
+vertex  100 -50
+vertex -100 150
+vertex  100 150
+
+// Vertices - Sector 1
+vertex   25 150 // 4
+vertex   75 150
+vertex   25 200
+vertex   75 200
+
+// Vertices - Sector 2
+vertex -100   0 // 8
+vertex -100 128
+vertex -130   0
+vertex -130 128
+
+// Vertices - Sector 3
+vertex -130 -300 // 12
+vertex -130  300
+vertex -500 -300
+vertex -500  300
+vertex -600 -200
+vertex -600  200
+
+// Walls - Sector 0
+wall   0 1       255   0   0
+wall   2 4       255   0   0
+portal 4 5  0 1  255   0   0
+wall   5 3       255   0   0
+wall   3 1       127   0   0
+wall   2 9       127   0   0
+portal 8 9  0 2  127   0   0
+wall   8 0       127   0   0
+
+// Walls - Sector 1
+wall   4 6       127   0 127
+wall   5 7       127   0 127
+wall   6 7       255   0 255
+
+// Walls - Sector 2
+portal 10 11 2 3  127   0 127
+wall    8 10      255   0 255
+wall    9 11      255   0 255
+
+// Walls - Sector 3
+wall 12 10        127   0 127
+wall 11 13        127   0 127
+wall 13 15        255   0 255
+wall 12 14        255   0 255
+wall 15 17        180   0 180
+wall 14 16        180   0 180
+wall 16 17        127   0 127
+
+sector 8  0 1 2 3 4 5 6 7            0 128    0   0 127    0 127   0
+sector 4  2 8 9 10                   0  85    0 127 127  127 127 127
+sector 4  6 11 12 13               -16  96    0   0 127  127  63 127
+sector 8  11 14 15 16 17 18 19 20  -32 200   63  63  63  127 127 127
