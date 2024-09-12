@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
+#include <algorithm>
 #include <iostream>
 
 std::vector<std::string> SplitStringBySpaces(std::string s) {
@@ -31,7 +32,55 @@ std::vector<std::string> SplitStringBySpaces(std::string s) {
 }
 
 namespace Engine {
+    Wall *checkCollision(World *w, Entity *p, Point oldPos, Point newPos, sdword skipWall) {
+        Sector currentSec = w->worldSectors[p->currentSector];
+    
+        for(auto& wIndex : currentSec.wallIndices) {
+            if(wIndex == skipWall) continue;
+            Wall wall = w->worldWalls[wIndex];
+    
+            Point p1 = w->worldVertices[wall.vertexIndex1];
+            Point p2 = w->worldVertices[wall.vertexIndex2];
+    
+            Vector2 npos = {(float)newPos.x, (float)newPos.y};
+            Vector2 pos1 = {(float)p1.x, (float)p1.y};
+            Vector2 pos2 = {(float)p2.x, (float)p2.y};
+    
+            for(double t = 0; t < 1; t += 0.001) {
+                Point point = lerp(oldPos, newPos, t);
+                npos = {(float)point.x, (float)point.y};
+    
+                bool colliding = CheckCollisionCircleLine(npos, 2, pos1, pos2);
+    
+                if(colliding) {
+                    if(wall.isPortal) {
+                        dword sectorToCheck = wall.frontSectorIndex;
+                        if(sectorToCheck == p->currentSector) sectorToCheck = wall.backSectorIndex;
+    
+                        Sector sec = w->worldSectors[sectorToCheck];
+                        if(sec.floorHeight > currentSec.floorHeight + 16) return w->worldWalls.data() + wIndex;
+                        if(sec.ceilHeight - currentSec.floorHeight < 85) return w->worldWalls.data() + wIndex;
+                        if(sec.ceilHeight - sec.floorHeight < 85) return w->worldWalls.data() + wIndex;
+    
+                        dword cSec = p->currentSector;
+                        p->currentSector = sectorToCheck;
+    
+                        Wall *res = checkCollision(w, p, oldPos, newPos, wIndex);
+                        p->currentSector = cSec;
+    
+                        return res;
+                    }
+    
+                    return w->worldWalls.data() + wIndex;
+                }
+            }
+        }
+    
+        return NULL;
+    }
+
     void SetPix(Point pos, dword width, dword height, Color c) {
+        if(!c.a) return;
         if(pos.x < 0 || pos.y < 0) return;
         if(pos.x >= width || pos.y >= height) return;
 
@@ -75,7 +124,7 @@ namespace Engine {
         return ScreenPoint;
     }
 
-    void Wall::Draw3D(Player *p, sdword width, sdword height, std::vector<Point> points, float z, float h, float sectorLightMultiplier, Point *p1out, Point *p2out, Point *p3out, Point *p4out) {
+    bool Wall::Draw3D(Player *p, sdword width, sdword height, std::vector<Point> points, float z, float h, float sectorLightMultiplier, Point *p1out, Point *p2out, Point *p3out, Point *p4out) {
         Point v1 = points[vertexIndex1];
         Point v2 = points[vertexIndex2];
 
@@ -105,7 +154,7 @@ namespace Engine {
         double z2 = h - p->z;
 
         // Do not draw if behind player
-        if(p1_rot.y < 0.0001 && p2_rot.y < 0.0001) return;
+        if(p1_rot.y < 0.00001 && p2_rot.y < 0.00001) return false;
 
         // Clip walls behind player if they are not visible
         double m = 0;
@@ -214,9 +263,11 @@ namespace Engine {
         if(p2out) *p2out = p2;
         if(p3out) *p3out = p3;
         if(p4out) *p4out = p4;
+
+        return true;
     }
 
-    void Wall::DrawPortal(Player *p, sdword width, sdword height, std::vector<Point> points, std::vector<Sector> sectors, dword sectorID, Point *p1out, Point *p2out, Point *p3out, Point *p4out) {
+    bool Wall::DrawPortal(Player *p, sdword width, sdword height, std::vector<Point> points, std::vector<Sector> sectors, dword sectorID, Point *p1out, Point *p2out, Point *p3out, Point *p4out) {
         Sector front = sectors[frontSectorIndex];
         Sector back  = sectors[backSectorIndex];
 
@@ -255,39 +306,52 @@ namespace Engine {
         Point p1, p2, p3, p4;
 
         if(lowestFloorSecIndex == sectorID) {
-            lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minFloor, maxFloor, sectors[lowestFloorSecIndex].lightMultiplier, &p1, &p2);
+            if(!lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minFloor, maxFloor, sectors[lowestFloorSecIndex].lightMultiplier, &p1, &p2)) return false;
 
             if(p1out) *p1out = p1;
             if(p2out) *p2out = p2;
         } else {
-            lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, maxFloor, maxFloor, sectors[highestFloorSecIndex].lightMultiplier, &p1, &p2);
+            if(!lowWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, maxFloor, maxFloor, sectors[highestFloorSecIndex].lightMultiplier, &p1, &p2)) return false;
 
             if(p1out) *p1out = p1;
             if(p2out) *p2out = p2;
         }
 
         if(lowestCeilSecIndex != sectorID) {
-            highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, maxCeil, sectors[highestCeilSecIndex].lightMultiplier, NULL, NULL, &p3, &p4);
+            if(!highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, maxCeil, sectors[highestCeilSecIndex].lightMultiplier, NULL, NULL, &p3, &p4)) return false;
 
             if(p3out) *p3out = p3;
             if(p4out) *p4out = p4;
         } else {
-            highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, minCeil, sectors[lowestCeilSecIndex].lightMultiplier, NULL, NULL, &p3, &p4);
+            if(!highWall.Draw3D(p, width, height, { points[vertexIndex1], points[vertexIndex2] }, minCeil, minCeil, sectors[lowestCeilSecIndex].lightMultiplier, NULL, NULL, &p3, &p4)) return false;
 
             if(p3out) *p3out = p3;
             if(p4out) *p4out = p4;
         }
 
+        return true;
     }
 
-    void Sector::Draw3D(Player *p, dword width, dword height, std::vector<Wall> walls, std::vector<Point> points, std::vector<Sector> sectors, sdword currentSectorIndex, sdword lastSectorIndex) {
+    void Sector::Draw3D(Player *p, World *world, dword width, dword height, sdword currentSectorIndex, sdword lastSectorIndex) {
+        // Draw Entities
+        for(auto& entity : entities) {
+            entity->Render(world, p, width, height);
+        }
+
+        std::vector<dword> indexesToIgnore = {};
         for(auto& wallIndex : wallIndices) {
-            Wall w = walls[wallIndex];
+            Wall w = world->worldWalls[wallIndex];
 
             Point p1, p2, p3, p4;
 
-            if(w.isPortal) w.DrawPortal(p, width, height, points, sectors, currentSectorIndex, &p1, &p2, &p3, &p4);
-            else w.Draw3D(p, width, height, points, floorHeight, ceilHeight, lightMultiplier, &p1, &p2, &p3, &p4);
+            bool res = false;
+            if(w.isPortal) res = w.DrawPortal(p, width, height, world->worldVertices, world->worldSectors, currentSectorIndex, &p1, &p2, &p3, &p4);
+            else res = w.Draw3D(p, width, height, world->worldVertices, floorHeight, ceilHeight, lightMultiplier, &p1, &p2, &p3, &p4);
+
+            if(!res) { 
+                indexesToIgnore.push_back(wallIndex);
+                continue;
+            }
 
             // Render Flats
             float mBottom = (p2.y - p1.y) / (p2.x - p1.x);
@@ -334,9 +398,10 @@ namespace Engine {
 
         // Draw Portals
         for(auto& wallIndex : wallIndices) {
-            if(!walls[wallIndex].isPortal) continue;
+            if(!world->worldWalls[wallIndex].isPortal) continue;
+            //if(std::find(indexesToIgnore.begin(), indexesToIgnore.end(), wallIndex) != indexesToIgnore.end()) continue;
 
-            Wall w = walls[wallIndex];
+            Wall w = world->worldWalls[wallIndex];
             sdword sectorIndex = 0;
             if(w.frontSectorIndex == currentSectorIndex) {
                 sectorIndex = w.backSectorIndex;
@@ -346,7 +411,7 @@ namespace Engine {
             }
 
             if(sectorIndex == lastSectorIndex) continue;
-            sectors[sectorIndex].Draw3D(p, width, height, walls, points, sectors, sectorIndex, currentSectorIndex);
+            world->worldSectors[sectorIndex].Draw3D(p, world, width, height, sectorIndex, currentSectorIndex);
         }
 
     }
@@ -371,48 +436,8 @@ namespace Engine {
             pixels[i] = 0;
         }
 
-        // Calculate what sector the player is in.
-        //   1. Translate the world to player-origin coordinates
-        //   2. Iterate through each wall in the sector
-        //   3. Cast a ray from the origin in the -y direction
-        //   4. Count the number of intersections
-        //   5. If there is an even number of intersections, the player is within the sector.
-        //
-        //   THIS ONLY WORKS WITH A CONVEX SECTOR.
-        for(dword sIndex = 0; sIndex < worldSectors.size(); ++sIndex) {
-            Sector s = worldSectors[sIndex];
-            dword nintersections = 0;
-
-            for(auto wIndex : s.wallIndices) {
-                Wall w = worldWalls[wIndex];
-                Point v1 = worldVertices[w.vertexIndex1];
-                Point v2 = worldVertices[w.vertexIndex2];
-
-                bool playerInLineRange = ((v2.x >= p->x) && (v1.x <= p->x)) || ((v2.x <= p->x) && (v1.x >=  p->x));
-                if(!playerInLineRange) continue;
-
-                v1.x -= p->x;
-                v1.y -= p->y;
-
-                v2.x -= p->x;
-                v2.y -= p->y;
-
-                if(v2.x == v1.x) continue;
-                double m = (v2.y - v1.y) / (v2.x - v1.x);
-                double c = v1.y - m * v1.x;
-
-                double y = c;
-                if(y < 0) { 
-                    nintersections++;
-                }             
-            }
-
-            if(nintersections % 2 == 1) {
-                p->currentSector = sIndex;
-            }
-        }
         
-        worldSectors[p->currentSector].Draw3D(p, width, height, worldWalls, worldVertices, worldSectors, p->currentSector);
+        worldSectors[p->currentSector].Draw3D(p, this, width, height, p->currentSector);
 
         UpdateTexture(tex, pixels);
         DrawTextureEx(tex, {0, 0}, 0.0f, (float)scale, WHITE);

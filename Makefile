@@ -1,6 +1,6 @@
 CC = g++
 
-CCFLAGS = -g -c -Wall
+CCFLAGS = -g -c -Wall -O2
 LDFLAGS = -lraylib
 
 SRC = $(wildcard src/*.cpp)
